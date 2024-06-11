@@ -1,153 +1,77 @@
-
-from models.conn import conn, cursor
+from database.connection import get_db_connection
 
 class Magazine:
-    def __init__(self, name, category= None, id = None):
-        # if not isinstance(name,str):
-        #     raise TypeError("Name must be a string")
-        # if not 2 <= len(name) <= 16:
-        #     raise ValueError("Names must be between 2 and 16 characters, inclusive")
-        # if not isinstance(category,str):
-        #     raise TypeError("Category must be a string")
-        # if len(category) == 0:
-        #     raise ValueError("Name cannot be empty")
+    def __init__(self, name, category):
+        self._id = None
+        self.name = name
+        self.category = category
+        self.save()
 
-        self._id = id
-        self._name = name
-        self._category = category
-
-
-    @classmethod
-    def create_table(cls):
-        sql = """
-        CREATE TABLE IF NOT EXISTS magazines (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        category TEXT,
-        CONSTRAINT unique_name_category UNIQUE (name, category)
-        );
-        """
-        cursor.execute(sql)
+    def save(self):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO magazines (name, category) VALUES (?, ?)', (self.name, self.category))
+        self._id = cursor.lastrowid
         conn.commit()
-
-    @classmethod
-    def drop_table(cls):
-        cursor.execute("DROP TABLE IF EXISTS magazines")
-        conn.commit()
+        conn.close()
 
     @property
     def id(self):
         return self._id
 
-    @id.setter
-    def id(self, value):
-        if not isinstance(value,int):
-            raise ValueError("ID must be an integer value")
-        self._id = value
-
     @property
     def name(self):
-        if self._id is not None:
-            sql = "SELECT name FROM magazines WHERE id = ?"
-            cursor.execute(sql, (self.id,))
-            result = cursor.fetchone()
-            if result:
-                 return result[0]
         return self._name
-
 
     @name.setter
     def name(self, value):
-        if not isinstance(value,str):
-            raise TypeError("Name must be a string")
-        if not 2 <= len(value) <= 16:
-            raise ValueError("Names must be between 2 and 16 characters, inclusive")
+        if not isinstance(value, str) or not (2 <= len(value) <= 16):
+            raise ValueError("Name must be a string between 2 and 16 characters")
         self._name = value
 
     @property
     def category(self):
-        if self._id is not None:
-            sql = "SELECT category FROM magazines WHERE id = ?"
-            cursor.execute(sql, (self.id,))
-            result = cursor.fetchone()
-            if result:
-                return result[0]
         return self._category
 
     @category.setter
     def category(self, value):
-        if not isinstance(value,str):
-            raise TypeError("Category must be a string")
-        if len(value) == 0:
-            raise ValueError("Category cannot be empty")
+        if not isinstance(value, str) or len(value) == 0:
+            raise ValueError("Category must be a non-empty string")
         self._category = value
 
-    def save(self):
-        sql = "INSERT INTO magazines(name,category)VALUES(?,?)"
-        cursor.execute(sql, (self.name, self.category))
-        conn.commit()
-        self.id = cursor.lastrowid
+    @staticmethod
+    def fetch_all():
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM magazines')
+        magazines = cursor.fetchall()
+        conn.close()
+        return [Magazine(magazine['name'], magazine['category']) for magazine in magazines]
 
-    @classmethod
-    def create(cls, name, category):
-        sql = "SELECT id FROM magazines WHERE name = ? AND category = ?"
-        cursor.execute(sql, (name, category))
-        existing_magazine = cursor.fetchone()
-        if existing_magazine:
-            raise ValueError("A magazine with the same name and category already exists")
-    
-        magazine = cls(name, category)
-        magazine.save()
-        return magazine
-
-        
     def articles(self):
-        sql = "SELECT title FROM articles WHERE magazine_id = ?"
-        cursor.execute(sql, (self.id,))
-        result = cursor.fetchall()
-        article_titles = [row[0] for row in result]
-        return article_titles
+        from models.article import Article  # Import inside method to avoid circular import
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM articles
+            WHERE magazine_id = ?
+        ''', (self.id,))
+        articles = cursor.fetchall()
+        conn.close()
+        return [Article(article["id"], article["title"], article["content"]) for article in articles]
 
     def contributors(self):
-        sql = """
-        SELECT DISTINCT authors.name
-        FROM articles
-        INNER JOIN authors ON articles.author_id = authors.id
-        WHERE articles.magazine_id = ?
-        """
-        cursor.execute(sql, (self.id,))
-        contributor_names = [row[0] for row in cursor.fetchall()]
-        return contributor_names
-
-    def article_titles(self):
-        sql = "SELECT title FROM articles WHERE magazine_id = ?"
-        cursor.execute(sql, (self.id,))
-        article_titles = [row[0] for row in cursor.fetchall()]
-        return article_titles
-
-    def contributing_authors(self):
-        sql = """
-            SELECT authors.id, authors.name
-            FROM articles
-            INNER JOIN authors ON articles.author_id = authors.id
-            WHERE articles.magazine_id = ?
-            GROUP BY authors.id
-            HAVING COUNT(*) > 2
-            """
-        cursor.execute(sql, (self.id,))
-        authors_data = cursor.fetchall()
-
-        # Check if there are any authors with more than 2 publications
-        if not authors_data:
-            return None
-
-        # Convert data to Author objects
-        contributing_authors = []
-        for author_id, author_name in authors_data:
-            author = author(name=author_name, id=author_id)
-            contributing_authors.append(author)
-
-        return contributing_authors
+        from models.author import Author  # Import inside method to avoid circular import
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT DISTINCT a.* FROM authors a
+            JOIN articles ar ON a.id = ar.author_id
+            WHERE ar.magazine_id = ?
+        ''', (self.id,))
+        authors = cursor.fetchall()
+        conn.close()
+        return [Author(author["name"]) for author in authors]
 
     def __repr__(self):
         return f'<Magazine {self.name}>'

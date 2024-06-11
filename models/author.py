@@ -1,71 +1,67 @@
-from models.conn import conn,cursor
+# author.py
+
+from database.connection import get_db_connection
 
 class Author:
-    def __init__(self, name, id=None):
+    def __init__(self, id, name):
         self._id = id
-        self._name = name
+        self.name = name
+
+    @classmethod
+    def fetch_all(cls):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM authors')
+        authors = cursor.fetchall()
+        conn.close()
+        return [cls(author['id'], author['name']) for author in authors]
+
+    def save(self):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO authors (name) VALUES (?)', (self.name,))
+        self._id = cursor.lastrowid
+        conn.commit()
+        conn.close()
 
     @property
     def id(self):
         return self._id
 
-    @id.setter
-    def id(self, value):
-        if not isinstance(value, int):
-            raise TypeError("Author ID must be an integer")
-        self._id = value
-
     @property
     def name(self):
         return self._name
+
     @name.setter
     def name(self, value):
-        if not isinstance(name, str):
-            raise TypeError("Name must be a string")
-        if len(name) == 0:
-            raise ValueError("Author name must be longer than 0 characters ")
-
-    def save(self):
-        sql = """
-        INSERT INTO authors (name) VALUES (?)
-        """
-        cursor.execute(sql, (self.name,))
-        conn.commit()
-        self.id = cursor.lastrowid
-
-    @classmethod
-    def create(cls, name):
-        sql = "SELECT id FROM authors WHERE name = ?"
-        cursor.execute(sql, (name,))
-        result = cursor.fetchone()
-        if result:
-            author_id = result[0]
-            return cls(name, id=author_id)
-        else:
-            author = cls(name)
-            author.save()
-            return author
+        if not isinstance(value, str) or len(value) == 0:
+            raise ValueError("Name must be a non-empty string")
+        self._name = value
 
     def articles(self):
-        sql = """
-         SELECT articles.title
-         FROM articles
-         WHERE articles.author_id = ?
-        """
-        cursor.execute(sql, (self.id,))
-        article_titles = [row[0] for row in cursor.fetchall()]
-        return article_titles
+        from models.article import Article  # Import inside method to avoid circular import
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM articles
+            WHERE author_id = ?
+        ''', (self.id,))
+        articles = cursor.fetchall()
+        conn.close()
+        return [Article(article["id"], article["title"], article["content"]) for article in articles]
 
     def magazines(self):
-        sql = """
-        SELECT DISTINCT magazines.name
-        FROM articles
-        INNER JOIN magazines ON articles.magazine_id = magazines.id
-        WHERE articles.author_id = ?
-        """
-        cursor.execute(sql, (self.id,))
-        magazine_names = [row[0] for row in cursor.fetchall()]
-        return magazine_names
+        from models.magazine import Magazine  # Import inside method to avoid circular import
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT DISTINCT m.* FROM magazines m
+            JOIN articles a ON m.id = a.magazine_id
+            WHERE a.author_id = ?
+        ''', (self.id,))
+        magazines = cursor.fetchall()
+        conn.close()
+        return [Magazine(magazine["name"], magazine["category"]) for magazine in magazines]
 
     def __repr__(self):
         return f'<Author {self.name}>'

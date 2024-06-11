@@ -1,78 +1,58 @@
-from models.conn import conn, cursor
+from database.connection import get_db_connection
+from models.author import Author
+from models.magazine import Magazine
 
 class Article:
-    def __init__(self, title, content, author_id, magazine_id,id = None):
-        self.id = id
-        self._title = title
+    def __init__(self, id, title, content, author_id, magazine_id):
+        self._id = id
+        self.title = title
         self.content = content
-        self.author_id = author_id
-        self.magazine_id = magazine_id
+        self._author_id = author_id
+        self._magazine_id = magazine_id
 
-    @classmethod
-    def create_table(cls):
-        cursor.execute("CREATE TABLE IF NOT EXISTS articles (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, content TEXT, author_id INTEGER, magazine_id INTEGER, FOREIGN KEY (author_id) REFERENCES authors(id), FOREIGN KEY (magazine_id) REFERENCES magazines(id))")
-        conn.commit()
-
-    @classmethod
-    def drop_table(cls):
-        cursor.execute("DROP TABLE IF EXISTS articles")
-        conn.commit()
-        
     @property
-    def title(self):
-        return self._title
+    def id(self):
+        return self._id
 
-    @title.setter
-    def title(self, value):
-        if not isinstance(value, str):
-            raise TypeError("Title must be a string")
-        if not 5<= len(value)<=50:
-            raise ValueError("Title must be between 5 and 50 characters")
+    @property
+    def author_id(self):
+        return self._author_id
 
-        self._title = value
+    @property
+    def magazine_id(self):
+        return self._magazine_id
 
-    def save(self):
-        sql = "INSERT INTO articles(title,content,author_id,magazine_id)VALUES(?,?,?,?)"
-        cursor.execute(sql, (self.title, self.content, self.author_id, self.magazine_id))
-        conn.commit()
-        self.id = cursor.lastrowid
-
-    @classmethod
-    def create(cls, title, content, author_id, magazine_id):
-    # Check if author_id exists
-        cursor.execute("SELECT COUNT(*) FROM authors WHERE id = ?", (author_id,))
-        author_exists = cursor.fetchone()[0] > 0
-
-    # Check if magazine_id exists
-        cursor.execute("SELECT COUNT(*) FROM magazines WHERE id = ?", (magazine_id,))
-        magazine_exists = cursor.fetchone()[0] > 0
-
-        if not author_exists:
-            raise ValueError("Author with id {} does not exist".format(author_id))
-
-        if not magazine_exists:
-            raise ValueError("Magazine with id {} does not exist".format(magazine_id))
-
-        article = cls(title, content, author_id, magazine_id)
-        article.save()
-        return article
-
+    @property
     def author(self):
-        sql = "SELECT authors.name FROM articles INNER JOIN authors ON articles.author_id = authors.id WHERE articles.id = ?"
-        cursor.execute(sql, (self.id,))
-        return cursor.fetchone()[0]
+        if self._author_id is None:
+            return None
 
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM authors WHERE id = ?', (self.author_id,))
+        author = cursor.fetchone()
+        conn.close()
 
+        if author:
+            return Author(author['id'], author['name'])
+        else:
+            return None
+
+    @property
     def magazine(self):
-        sql = "SELECT magazines.name FROM articles INNER JOIN magazines ON articles.magazine_id = magazines.id WHERE articles.id = ?"
-        cursor.execute(sql, (self.id,))
-        return cursor.fetchone()[0]
+        if self._magazine_id is None:
+            return None
 
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM magazines WHERE id = ?', (self.magazine_id,))
+        magazine = cursor.fetchone()
+        conn.close()
+
+        if magazine:
+            return Magazine(magazine['id'], magazine['name'], magazine['category'])
+        else:
+            return None
 
     def __repr__(self):
         return f'<Article {self.title}>'
-
-    # def test_article_creation(self):
-    #     article = Article("Test Title", "Test Content", 1, 1, id=1)
-    #     print('Article title:', article.title)
-    #     self.assertEqual(article.title, "Test Title")
