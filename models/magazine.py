@@ -49,7 +49,7 @@ class Magazine:
         return [Magazine(magazine['name'], magazine['category']) for magazine in magazines]
 
     def articles(self):
-        from models.article import Article  # Import inside method to avoid circular import
+        from models.article import Article  
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
@@ -61,7 +61,7 @@ class Magazine:
         return [Article(article["id"], article["title"], article["content"]) for article in articles]
 
     def contributors(self):
-        from models.author import Author  # Import inside method to avoid circular import
+        from models.author import Author  
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''

@@ -7,14 +7,12 @@ def main():
     # Initialize the database and create tables
     create_tables()
 
-    # Collect user input
     author_name = input("Enter author's name: ")
     magazine_name = input("Enter magazine name: ")
     magazine_category = input("Enter magazine category: ")
     article_title = input("Enter article title: ")
     article_content = input("Enter article content: ")
 
-    # Connect to the database
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -32,7 +30,7 @@ def main():
 
     conn.commit()
 
-    # Query and display results
+    # results
     print("\nMagazines:")
     for magazine in Magazine.fetch_all():
         print(magazine)
@@ -41,7 +39,6 @@ def main():
     for author in Author.fetch_all():
         print(author)
 
-    # Close the database connection
     conn.close()
 
 if __name__ == "__main__":
